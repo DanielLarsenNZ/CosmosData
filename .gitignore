@@ -1,0 +1,6 @@
+appsettings.json
+.vs
+bin
+obj
+_*
+release
