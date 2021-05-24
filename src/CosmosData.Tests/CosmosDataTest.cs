@@ -4,6 +4,9 @@ using System.IO;
 
 namespace CosmosData.Tests
 {
+    /// <summary>
+    /// Test helper base class
+    /// </summary>
     public abstract class CosmosDataTest
     {
         // load configuration from appsettings.json file

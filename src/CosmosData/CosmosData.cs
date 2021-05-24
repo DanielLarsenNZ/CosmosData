@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 
 namespace CosmosData
 {
+    /// <summary>
+    /// A generic Cosmos DB Data access layer
+    /// </summary>
+    /// <typeparam name="T">A type of ICosmosModel</typeparam>
     public class CosmosData<T> : ICosmosData<T> where T : ICosmosModel
     {
         protected readonly Container _container;
@@ -22,6 +26,11 @@ namespace CosmosData
             TypeName = type.GenericTypeArguments.Any() ? $"{nameof(CosmosData)}<{type.GenericTypeArguments[0].Name}>" : type.Name;
         }
 
+        /// <summary>
+        /// Create an item in the Cosmos DB container
+        /// </summary>
+        /// <param name="item">The item to create</param>
+        /// <returns>The created resource</returns>
         public async Task<T> Create(T item)
         {
             var response = await _container.CreateItemAsync(item);
@@ -29,6 +38,12 @@ namespace CosmosData
             return response.Resource;
         }
 
+        /// <summary>
+        /// Delete an item in the Cosmos DB container
+        /// </summary>
+        /// <param name="id">The item's Id</param>
+        /// <param name="pk">The item's Partition Key</param>
+        /// <param name="ifMatchETag">The ETag of the item to delete</param>
         public async Task Delete(string id, string pk, string ifMatchETag)
         {
             // Delete if-match eTag
@@ -43,6 +58,12 @@ namespace CosmosData
             TrackEvent($"CosmosData/{TypeName}/Delete", response.RequestCharge);
         }
 
+        /// <summary>
+        /// Gets an item by Id/PK
+        /// </summary>
+        /// <param name="id">The item's Id</param>
+        /// <param name="pk">The item's Partition Key</param>
+        /// <returns>The item</returns>
         public async Task<T> Get(string id, string pk)
         {
             var response = await _container.ReadItemAsync<T>(id, new PartitionKey(pk));
@@ -50,8 +71,22 @@ namespace CosmosData
             return response.Resource;
         }
 
+        /// <summary>
+        /// Gets all items in the Cosmos DB container
+        /// </summary>
+        /// <returns>An IEnumerable of T</returns>
         public async Task<IEnumerable<T>> GetAll() => 
             await GetWithQuery(new QueryDefinition($"SELECT * FROM {_container.Id}"));
+
+        /// <summary>
+        /// Gets any items in the Cosmos DB container for the given Partition Key.
+        /// </summary>
+        /// <param name="pk">The Partition Key</param>
+        /// <returns>An IEnumerable of T</returns>
+        public async Task<IEnumerable<T>> GetFilteredByPartitionKey(string pk) => 
+            await GetWithQuery(
+                new QueryDefinition($"SELECT * FROM {_container.Id}"), 
+                new QueryRequestOptions { PartitionKey = new PartitionKey(pk) });
 
         protected async Task<IEnumerable<T>> GetWithQuery(QueryDefinition query, QueryRequestOptions requestOptions = null)
         {
@@ -61,11 +96,12 @@ namespace CosmosData
             return items.Resource;
         }
 
-        public async Task<IEnumerable<T>> GetFilteredByPartitionKey(string pk) => 
-            await GetWithQuery(
-                new QueryDefinition($"SELECT * FROM {_container.Id}"), 
-                new QueryRequestOptions { PartitionKey = new PartitionKey(pk) });
-
+        /// <summary>
+        /// Replaces an item if the ETag matches that provided.
+        /// </summary>
+        /// <param name="item">The new item</param>
+        /// <param name="ifMatchEtag">The ETag of the item to be replaced.</param>
+        /// <returns>The new item</returns>
         public async Task<T> Replace(T item, string ifMatchEtag)
         {
             // Replace if-match eTag

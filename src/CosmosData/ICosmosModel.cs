@@ -2,6 +2,9 @@
 
 namespace CosmosData
 {
+    /// <summary>
+    /// Defines the minimum implementation for a Cosmos Model class (DTO). 
+    /// </summary>
     public interface ICosmosModel
     {
         [JsonProperty("id")]
@@ -9,8 +12,6 @@ namespace CosmosData
 
         [JsonProperty("pk")]
         string PK { get; set; }
-
-        //string Type { get; set; }
 
         [JsonProperty("_etag")]
         string ETag { get; set; }
