@@ -1,13 +1,11 @@
 ﻿using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.Configuration;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace CosmosData.Tests
 {
     [TestClass]
-    public class UserPermissions
+    public class UserPermissions : CosmosDataTest
     {
         string _userWithReadPermissionToken;
 
@@ -16,16 +14,10 @@ namespace CosmosData.Tests
         {
             // based on https://github.com/Azure/azure-cosmos-dotnet-v3/blob/master/Microsoft.Azure.Cosmos.Samples/Usage/UserManagement/UserManagementProgram.cs
 
-            // load configuration from appsettings.json file
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false)
-                .Build();
-
-            using (var client = new CosmosClient(config["CosmosData_ConnectionString"]))
+            using (var client = new CosmosClient(_config["CosmosData_ConnectionString"]))
             {
-                var database = client.GetDatabase(config["CosmosData_DatabaseId"]);
-                var container = client.GetContainer(config["CosmosData_DatabaseId"], config["CosmosData_Item_Container"]);
+                var database = client.GetDatabase(_config[CosmosDataDatabaseIdKey]);
+                var container = client.GetContainer(_config[CosmosDataDatabaseIdKey], _config[CosmosDataContainerIdKey]);
 
                 // Create a user
                 User user1 = await database.UpsertUserAsync("readonly_user_test1");
@@ -47,23 +39,11 @@ namespace CosmosData.Tests
         [TestMethod]
         public async Task ConnectWithUserWithReadPermission()
         {
-            // load configuration from appsettings.json file
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false)
-                .Build();
-
-            // initialise Application Insights telemetry client
-            var insights = InsightsHelper.InitializeTelemetryClient(config["APPINSIGHTS_INSTRUMENTATIONKEY"]);
-
             // use the Resource token instead of a master access token
-            using (var client = new CosmosClient(config["CosmosData_AccountEndpoint"], _userWithReadPermissionToken))
+            using (var client = new CosmosClient(_config["CosmosData_AccountEndpoint"], _userWithReadPermissionToken))
             {
                 // new instance of Data helper
-                ICosmosData<Item> data = new CosmosData<Item>(
-                    config,
-                    insights,
-                    client);
+                ICosmosData<Item> data = new CosmosData<Item>(_insights, client, _config[CosmosDataDatabaseIdKey], _config[CosmosDataContainerIdKey]);
 
                 // Get all items
                 var getAllItems = await data.GetAll();

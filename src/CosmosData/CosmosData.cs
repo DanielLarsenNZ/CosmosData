@@ -1,40 +1,31 @@
 ﻿using Microsoft.ApplicationInsights;
 using Microsoft.Azure.Cosmos;
-using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CosmosData
 {
     public class CosmosData<T> : ICosmosData<T> where T : ICosmosModel
     {
-        private const string CosmosDbIdKey = "CosmosData_DatabaseId";
-
-        protected readonly TelemetryClient _telemetry;
         protected readonly Container _container;
+        protected readonly string TypeName;
+        protected readonly TelemetryClient _telemetry;
 
-        protected readonly string ModelName;
-
-        public CosmosData(IConfiguration config, TelemetryClient telemetry, CosmosClient cosmos)
+        public CosmosData(TelemetryClient telemetry, CosmosClient cosmos, string databaseId, string containerId)
         {
             _telemetry = telemetry;
+            _container = cosmos.GetContainer(databaseId: databaseId, containerId: containerId);
 
-            // Get model name from Type Argument. This is reflection on construction. CosmosData should be a singleton.
-            ModelName = GetType().GenericTypeArguments[0].Name;
-
-            // Derived container app setting key name
-            var cosmosContainerKey = $"CosmosData_{ModelName}_Container";
-
-            if (string.IsNullOrEmpty(config[CosmosDbIdKey])) throw new MissingConfigurationException(CosmosDbIdKey);
-            if (string.IsNullOrEmpty(config[cosmosContainerKey])) throw new MissingConfigurationException(cosmosContainerKey);
-
-            _container = cosmos.GetContainer(config[CosmosDbIdKey], config[cosmosContainerKey]);
+            // Get type name. This is reflection on construction. CosmosData should be a singleton.
+            var type = GetType();
+            TypeName = type.GenericTypeArguments.Any() ? $"{nameof(CosmosData)}<{type.GenericTypeArguments[0].Name}>" : type.Name;
         }
 
         public async Task<T> Create(T item)
         {
             var response = await _container.CreateItemAsync(item);
-            TrackEvent($"CosmosData/{ModelName}/Create", response, item);
+            TrackEvent($"CosmosData/{TypeName}/Create", response, item);
             return response.Resource;
         }
 
@@ -49,27 +40,31 @@ namespace CosmosData
                     IfMatchEtag = ifMatchETag
                 });
 
-            TrackEvent($"CosmosData/{ModelName}/Delete", response.RequestCharge);
+            TrackEvent($"CosmosData/{TypeName}/Delete", response.RequestCharge);
         }
 
         public async Task<T> Get(string id, string pk)
         {
             var response = await _container.ReadItemAsync<T>(id, new PartitionKey(pk));
-            TrackEvent($"CosmosData/{ModelName}/Get", response, response.Resource);
+            TrackEvent($"CosmosData/{TypeName}/Get", response, response.Resource);
             return response.Resource;
         }
 
-        public async Task<IEnumerable<T>> GetAll()
-        {
-            QueryDefinition query =
-                new QueryDefinition($"SELECT * FROM {_container.Id} c WHERE c.Type = @type")
-                .WithParameter("@type", ModelName);
+        public async Task<IEnumerable<T>> GetAll() => 
+            await GetWithQuery(new QueryDefinition($"SELECT * FROM {_container.Id}"));
 
-            var iterator = _container.GetItemQueryIterator<T>(query);
+        protected async Task<IEnumerable<T>> GetWithQuery(QueryDefinition query, QueryRequestOptions requestOptions = null)
+        {
+            var iterator = _container.GetItemQueryIterator<T>(query, requestOptions: requestOptions);
             var items = await iterator.ReadNextAsync();
-            TrackEvent($"CosmosData/{ModelName}/GetAll", items.RequestCharge);
+            TrackEvent($"CosmosData/{TypeName}/GetAll", items.RequestCharge);
             return items.Resource;
         }
+
+        public async Task<IEnumerable<T>> GetFilteredByPartitionKey(string pk) => 
+            await GetWithQuery(
+                new QueryDefinition($"SELECT * FROM {_container.Id}"), 
+                new QueryRequestOptions { PartitionKey = new PartitionKey(pk) });
 
         public async Task<T> Replace(T item, string ifMatchEtag)
         {
@@ -82,28 +77,24 @@ namespace CosmosData
                 {
                     IfMatchEtag = ifMatchEtag
                 });
-            TrackEvent($"CosmosData/{ModelName}/Replace", response, response.Resource);
+            TrackEvent($"CosmosData/{TypeName}/Replace", response, response.Resource);
             return response.Resource;
         }
 
         // Private helpers for tracking Cosmos DB metrics and events
-        private void TrackEvent(string eventName, double requestCharge)
-        {
+        private void TrackEvent(string eventName, double requestCharge) => 
             _telemetry.TrackEvent(
                 eventName,
                 metrics: new Dictionary<string, double>
                 {
                     { "Cosmos_RequestCharge", requestCharge }
                 });
-        }
 
-        private void TrackEvent(string eventName, ItemResponse<T> response, T item)
-        {
+        private void TrackEvent(string eventName, ItemResponse<T> response, T item) => 
             _telemetry.TrackEvent(
                 eventName,
                 properties: new Dictionary<string, string>
                     {
-                        { "Cosmos_DocumentType", item.Type },
                         { "Cosmos_DocumentId", item.Id },
                         { "Cosmos_DocumentPK", item.PK },
                         { "Cosmos_DocumentETag", response.ETag }
@@ -112,6 +103,5 @@ namespace CosmosData
                     {
                         { "Cosmos_RequestCharge", response.RequestCharge }
                     });
-        }
     }
 }

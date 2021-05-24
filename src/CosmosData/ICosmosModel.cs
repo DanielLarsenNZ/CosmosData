@@ -10,7 +10,7 @@ namespace CosmosData
         [JsonProperty("pk")]
         string PK { get; set; }
 
-        string Type { get; set; }
+        //string Type { get; set; }
 
         [JsonProperty("_etag")]
         string ETag { get; set; }

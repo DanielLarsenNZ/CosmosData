@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace CosmosData
+namespace CosmosData.Tests
 {
     public class MissingConfigurationException : Exception
     {

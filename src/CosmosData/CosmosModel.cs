@@ -13,6 +13,6 @@ namespace CosmosData
         [JsonProperty("_etag")]
         public string ETag { get; set; }
 
-        public string Type { get; set; }
+        //public string Type { get; set; }
     }
 }
