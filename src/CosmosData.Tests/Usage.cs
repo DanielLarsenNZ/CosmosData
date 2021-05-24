@@ -15,7 +15,7 @@ namespace CosmosData.Tests
             using (var client = new CosmosClient(_config[CosmosDataConnectionStringKey]))
             {
                 // new instance of Data helper
-                ICosmosData<Item> data = new CosmosData<Item>(_insights, client, databaseId: _config[CosmosDataDatabaseIdKey], containerId: _config[CosmosDataContainerIdKey]);
+                var data = new CosmosData<Item>(_insights, client, databaseId: _config[CosmosDataDatabaseIdKey], containerId: _config[CosmosDataContainerIdKey]);
 
                 // Create
                 var item = await data.Create(new Item { Data = "Hello" });

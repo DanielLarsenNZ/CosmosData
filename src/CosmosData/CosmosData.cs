@@ -10,7 +10,7 @@ namespace CosmosData
     /// A generic Cosmos DB Data access layer
     /// </summary>
     /// <typeparam name="T">A type of ICosmosModel</typeparam>
-    public class CosmosData<T> : ICosmosData<T> where T : ICosmosModel
+    public class CosmosData<T> where T : ICosmosModel
     {
         protected readonly Container _container;
         protected readonly string TypeName;

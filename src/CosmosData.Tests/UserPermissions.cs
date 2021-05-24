@@ -43,7 +43,7 @@ namespace CosmosData.Tests
             using (var client = new CosmosClient(_config["CosmosData_AccountEndpoint"], _userWithReadPermissionToken))
             {
                 // new instance of Data helper
-                ICosmosData<Item> data = new CosmosData<Item>(_insights, client, _config[CosmosDataDatabaseIdKey], _config[CosmosDataContainerIdKey]);
+                var data = new CosmosData<Item>(_insights, client, _config[CosmosDataDatabaseIdKey], _config[CosmosDataContainerIdKey]);
 
                 // Get all items
                 var getAllItems = await data.GetAll();
