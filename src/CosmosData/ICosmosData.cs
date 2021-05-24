@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace CosmosData
 {
-    public interface ICosmosData<T> where T : IModel
+    public interface ICosmosData<T> where T : ICosmosModel
     {
         Task<T> Create(T item);
         Task Delete(string id, string pk, string eTag);

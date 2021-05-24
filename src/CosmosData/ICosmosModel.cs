@@ -2,7 +2,7 @@
 
 namespace CosmosData
 {
-    public interface IModel
+    public interface ICosmosModel
     {
         [JsonProperty("id")]
         string Id { get; set; }

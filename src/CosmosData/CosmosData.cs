@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CosmosData
 {
-    public class CosmosData<T> : ICosmosData<T> where T : IModel
+    public class CosmosData<T> : ICosmosData<T> where T : ICosmosModel
     {
         private const string CosmosDbIdKey = "CosmosData_DatabaseId";
 

@@ -49,7 +49,7 @@ namespace CosmosData.Tests
         }
     }
 
-    public class Item : Model
+    public class Item : CosmosModel
     {
         public Item()
         {

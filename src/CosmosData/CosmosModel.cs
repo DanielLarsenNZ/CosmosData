@@ -2,7 +2,7 @@
 
 namespace CosmosData
 {
-    public class Model : IModel
+    public class CosmosModel : ICosmosModel
     {
         [JsonProperty("id")]
         public string Id { get; set; }
