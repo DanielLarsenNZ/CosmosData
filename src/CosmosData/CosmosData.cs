@@ -33,8 +33,8 @@ namespace CosmosData
         /// <returns>The created resource</returns>
         public async Task<T> Create(T item)
         {
-            var response = await _container.CreateItemAsync(item);
-            TrackEvent($"CosmosData/{TypeName}/Create", response, item);
+            ItemResponse<T> response = await _container.CreateItemAsync(item);
+            TrackEvent($"CosmosData/{TypeName}/Create", response);
             return response.Resource;
         }
 
@@ -47,15 +47,16 @@ namespace CosmosData
         public async Task Delete(string id, string pk, string ifMatchETag)
         {
             // Delete if-match eTag
-            var response = await _container.DeleteItemAsync<T>(
+            ItemResponse<T> response = await _container.DeleteItemAsync<T>(
                 id,
                 new PartitionKey(pk),
                 new ItemRequestOptions
                 {
-                    IfMatchEtag = ifMatchETag
+                    IfMatchEtag = ifMatchETag,
+                    EnableContentResponseOnWrite = true,
                 });
 
-            TrackEvent($"CosmosData/{TypeName}/Delete", response.RequestCharge);
+            TrackEvent($"CosmosData/{TypeName}/Delete", response, id, pk, ifMatchETag);
         }
 
         /// <summary>
@@ -66,8 +67,8 @@ namespace CosmosData
         /// <returns>The item</returns>
         public async Task<T> Get(string id, string pk)
         {
-            var response = await _container.ReadItemAsync<T>(id, new PartitionKey(pk));
-            TrackEvent($"CosmosData/{TypeName}/Get", response, response.Resource);
+            ItemResponse<T> response = await _container.ReadItemAsync<T>(id, new PartitionKey(pk));
+            TrackEvent($"CosmosData/{TypeName}/Get", response);
             return response.Resource;
         }
 
@@ -75,7 +76,7 @@ namespace CosmosData
         /// Gets all items in the Cosmos DB container
         /// </summary>
         /// <returns>An IEnumerable of T</returns>
-        public async Task<IEnumerable<T>> GetAll() => 
+        public async Task<IEnumerable<T>> GetAll() =>
             await GetWithQuery(new QueryDefinition($"SELECT * FROM {_container.Id}"));
 
         /// <summary>
@@ -83,16 +84,16 @@ namespace CosmosData
         /// </summary>
         /// <param name="pk">The Partition Key</param>
         /// <returns>An IEnumerable of T</returns>
-        public async Task<IEnumerable<T>> GetFilteredByPartitionKey(string pk) => 
+        public async Task<IEnumerable<T>> GetFilteredByPartitionKey(string pk) =>
             await GetWithQuery(
-                new QueryDefinition($"SELECT * FROM {_container.Id}"), 
+                new QueryDefinition($"SELECT * FROM {_container.Id}"),
                 new QueryRequestOptions { PartitionKey = new PartitionKey(pk) });
 
         protected async Task<IEnumerable<T>> GetWithQuery(QueryDefinition query, QueryRequestOptions requestOptions = null)
         {
             var iterator = _container.GetItemQueryIterator<T>(query, requestOptions: requestOptions);
-            var items = await iterator.ReadNextAsync();
-            TrackEvent($"CosmosData/{TypeName}/GetAll", items.RequestCharge);
+            FeedResponse<T> items = await iterator.ReadNextAsync();
+            TrackEvent($"CosmosData/{TypeName}/GetAll", items);
             return items.Resource;
         }
 
@@ -113,31 +114,55 @@ namespace CosmosData
                 {
                     IfMatchEtag = ifMatchEtag
                 });
-            TrackEvent($"CosmosData/{TypeName}/Replace", response, response.Resource);
+            TrackEvent($"CosmosData/{TypeName}/Replace", response);
             return response.Resource;
         }
 
         // Private helpers for tracking Cosmos DB metrics and events
-        private void TrackEvent(string eventName, double requestCharge) => 
-            _telemetry.TrackEvent(
-                eventName,
-                metrics: new Dictionary<string, double>
-                {
-                    { "Cosmos_RequestCharge", requestCharge }
-                });
+        private void TrackEvent(string eventName, ItemResponse<T> response) =>
+            TrackEvent(
+                eventName, 
+                response?.Resource?.Id, 
+                response?.Resource?.PK, 
+                response?.Resource?.ETag, 
+                response.ActivityId, 
+                response.RequestCharge, 
+                response.Diagnostics.GetClientElapsedTime().TotalMilliseconds);
 
-        private void TrackEvent(string eventName, ItemResponse<T> response, T item) => 
+        private void TrackEvent(string eventName, FeedResponse<T> response) =>
+            TrackEvent(
+                eventName,
+                null,
+                null,
+                null,
+                response.ActivityId,
+                response.RequestCharge,
+                response.Diagnostics.GetClientElapsedTime().TotalMilliseconds);
+
+        private void TrackEvent(string eventName, ItemResponse<T> response, string documentId, string documentPK, string documentETag = null) =>
+            TrackEvent(
+                eventName,
+                documentId,
+                documentPK,
+                documentETag,
+                response.ActivityId,
+                response.RequestCharge,
+                response.Diagnostics.GetClientElapsedTime().TotalMilliseconds);
+
+        private void TrackEvent(string eventName, string documentId, string documentPK, string documentETag, string activityId, double requestCharge, double clientElapsedTimeMs) => 
             _telemetry.TrackEvent(
                 eventName,
                 properties: new Dictionary<string, string>
                     {
-                        { "Cosmos_DocumentId", item.Id },
-                        { "Cosmos_DocumentPK", item.PK },
-                        { "Cosmos_DocumentETag", response.ETag }
+                        { "Cosmos_DocumentId", documentId },
+                        { "Cosmos_DocumentPK", documentPK },
+                        { "Cosmos_DocumentETag", documentETag },
+                        { "Cosmos_ActivityId", activityId }
                     },
                 metrics: new Dictionary<string, double>
                     {
-                        { "Cosmos_RequestCharge", response.RequestCharge }
+                        { "Cosmos_RequestCharge", requestCharge },
+                        { "Cosmos_ClientElapsedTime_TotalMilliseconds", clientElapsedTimeMs }
                     });
     }
 }
